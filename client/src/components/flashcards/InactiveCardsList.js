@@ -1,0 +1,85 @@
+
+import React from "react";
+import { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
+import CardService from "../../utils/card.service";
+import CardItem from "../flashcards/CardItem";
+
+const InactiveCardsList = () => {
+  const [errorContent, setErrorContent] = useState("");
+  const [inactiveCards, setInactiveCards] = useState([]);
+
+  // Fatch all user's cards marked as inactive
+  const loadInactiveCards = async () => {
+    try {
+      const cards = await CardService.getInactiveCards();
+      console.log(cards);
+      setInactiveCards(cards);
+    } catch (error) {
+      const errorMessage = error.message || error.toString();
+      setErrorContent(errorMessage);
+    }
+  };
+
+  useEffect(() => {
+    loadInactiveCards();
+  }, []);
+
+  // Map all Cards to a CardItem component
+  function cardList() {
+    if (inactiveCards.length === 0) {
+      return (
+        <h2 className="display-5 text-white py-2">
+          No inactive cards found.
+        </h2>
+      );
+    }
+    return inactiveCards.map((card) => {
+      return <CardItem card={card} key={card["_id"]} />;
+    });
+  }
+
+  return (
+    <React.Fragment>
+      <section className="row py-4">
+        <span >
+          <Link to={"/card-session"} title="Start session" className="mb-5">
+            <i className="bi bi-play-circle-fill fs-2">Start session</i>
+
+          </Link>
+        </span>
+        <div className="col-12">
+          <h3 className="text-white pb-2">Manage cards</h3>
+        </div>
+
+        <div className="row m-1">
+          <ul className="nav nav-tabs">
+            <li className="nav-item">
+              <Link
+                to={"/manage-active-cards"}
+                className="nav-link text-white fs-5"
+                aria-current="page"
+
+              >
+                Active
+              </Link>
+            </li>
+            <li className="nav-item">
+              <Link
+                to={"/manage-inactive-cards"}
+                className="nav-link active text-white fs-5"
+                aria-current="page"
+              >Inactive
+
+              </Link>
+
+            </li>
+          </ul>
+        </div>
+        <div className="row gy-4 m-1">{cardList()}</div>
+      </section>
+    </React.Fragment>
+  );
+};
+
+export default InactiveCardsList;
