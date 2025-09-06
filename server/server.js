@@ -28,7 +28,7 @@ app.use(bodyParser.json());
 const server = http.createServer(app);
 const io = socketIo(server, {
   cors: {
-    origin: process.env.CLIENT_URL,
+    origin: "https://jobready-ona5.onrender.com",
     methods: ["GET", "POST"],
     credentials: true
   }
