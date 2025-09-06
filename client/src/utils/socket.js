@@ -1,6 +1,6 @@
 
 import { io } from "socket.io-client";
 
-const socket = io("https://jobready-kdmw.onrender.com"); // Adjust if backend is hosted elsewhere
+const socket = (process.env.REACT_APP_SOCKET_URL);
 
 export default socket;
