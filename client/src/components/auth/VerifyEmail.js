@@ -13,6 +13,7 @@ const VerifyEmail = () => {
     const verifyEmailToken = async () => {
       try {
         console.log('Verifying email token:', token);
+        console.log('API Base URL being used:', api.defaults.baseURL);
         await api.get(`/api/auth/verify-email/${token}`);
         console.log('Email verified successfully');
         setVerified(true);
