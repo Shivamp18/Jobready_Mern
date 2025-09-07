@@ -74,15 +74,18 @@ expiresIn.setHours(expiresIn.getHours() + 24);
 exports.verifyEmail = async (req, res) => {
   try {
   
-    const { token } = req.params.token;
-
+    console.log('Received verification request.');
+    const { token } = req.params;
+    console.log('Verification token from URL:', token);
 
     const user = await User.findOne({ verificationToken: token });
     
     if (!user) {
-   
+      console.log('Invalid verification token received:', token);
       return res.status(400).json({ message: 'Invalid verification token' });
     }
+    console.log('User found for verification:', user.email);
+
 
     // Token expiry check (as we added)
     if (user.expiresIn && user.expiresIn.getTime() < new Date().getTime()) {
@@ -96,6 +99,7 @@ exports.verifyEmail = async (req, res) => {
     user.verificationToken = undefined;
     user.expiresIn = undefined;
     await user.save();
+    console.log(`User ${user.email} successfully verified.`);
 
     res.status(200).json({ message: 'Email verified successfully. You can now login.' });
   } catch (error) {
