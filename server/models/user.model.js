@@ -26,7 +26,7 @@ const userSchema = new mongoose.Schema({
   },
   isVerified: {
     type: Boolean,
-    default: true                           //FIXME - changed false to true        
+    default: false      
   },
   verificationToken: String,
   expiresIn:{
