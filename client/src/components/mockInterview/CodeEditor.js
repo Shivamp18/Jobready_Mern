@@ -114,9 +114,14 @@ function MockInterview() {
       // When server tells us a new user connected, call them (we are caller)
       socket.on('user-connected', (userId) => {
         console.log('User connected:', userId);
+        if (!userId) {
+          console.warn('Received null or undefined userId from user-connected event. Skipping call.');
+          return;
+        }
         try {
           const call = peerRef.current.call(userId, stream);
-          call.on('stream', (remoteStream) => {
+          if (call) {
+            call.on('stream', (remoteStream) => {
             console.log('Remote stream received (caller):', remoteStream);
             const peerVideoElement = peerVideo.current;
             if (peerVideoElement) {
@@ -126,7 +131,9 @@ function MockInterview() {
               };
             }
           });
-        } catch (err) {
+          }else {
+            console.warn('Peer call returned null or undefined for userId:', userId);
+          }catch (err) {
           console.error('Call error:', err);
         }
       });
