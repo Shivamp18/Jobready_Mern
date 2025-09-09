@@ -1,6 +1,6 @@
 
 import { Formik } from 'formik';
-import { io } from "socket.io-client";
+import socket from '../../utils/socket';
 import React, { useState } from 'react';
 import { Button, Card, Form } from 'react-bootstrap';
 import { useNavigate } from 'react-router-dom';
@@ -9,7 +9,6 @@ const HomePage = () => {
   const [roomId, setRoomId] = useState('');
   const [role, setRole] = useState('interviewee');
   const navigate = useNavigate();
-  const socket = io(process.env.REACT_APP_SOCKET_URL || "http://localhost:5000");
   const joinRoom = () => {
     if (roomId && role) {
       console.log('Socket object before emit:', socket);
