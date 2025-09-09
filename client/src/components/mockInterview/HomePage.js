@@ -12,6 +12,7 @@ const HomePage = () => {
 
   const joinRoom = () => {
     if (roomId && role) {
+      console.log('Socket object before emit:', socket);
 
       socket.emit('join_room', { roomId, role });
 
