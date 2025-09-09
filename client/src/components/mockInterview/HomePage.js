@@ -1,6 +1,6 @@
 
 import { Formik } from 'formik';
-import socket from '../../utils/socket';
+import getSocket from '../../utils/socket';
 import React, { useState } from 'react';
 import { Button, Card, Form } from 'react-bootstrap';
 import { useNavigate } from 'react-router-dom';
@@ -11,7 +11,7 @@ const HomePage = () => {
   const navigate = useNavigate();
   const joinRoom = () => {
     if (roomId && role) {
-      console.log('Socket object before emit:', socket);
+      const socket = getSocket();
 
       socket.emit('join_room', { roomId, role });
 
