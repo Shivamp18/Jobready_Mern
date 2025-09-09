@@ -78,7 +78,7 @@ function MockInterview() {
     peerRef.current.on('open', (id) => {
       console.log('Peer ID:', id);
       // keep both emits used in your original code to avoid breaking server expectations:
-      socket.emit('join-room', roomId, id);   // peer signaling
+      socket.emit('join_room', roomId, id);   // peer signaling
       socket.emit('join_room', roomId);       // code collaboration room (your original used this too)
     });
 
