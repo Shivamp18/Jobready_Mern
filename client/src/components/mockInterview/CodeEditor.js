@@ -56,13 +56,15 @@ function MockInterview() {
   });
 
   // Join Peer room
-  peer.on('open', () => {
+  peer.on('open', (id) => {
+    console.log('Peer ID:', id);
     const socket = getSocket();
-    socket.emit('join-room', roomId);
+    socket.emit('join-room', roomId, id); // Pass peer ID to server
   });
 
   // Get user's video/audio
   navigator.mediaDevices.getUserMedia({ video: true, audio: true }).then((stream) => {
+    console.log('Local stream obtained:', stream);
     localStream = stream;
 
     const myVideoElement = myVideo.current;
@@ -75,8 +77,10 @@ function MockInterview() {
 
     // Call when someone connects
     socket.on('user-connected', (userId) => {
+     console.log('User connected:', userId);
       const call = peer.call(userId, stream);
       call.on('stream', (remoteStream) => {
+        console.log('Remote stream received (caller):', remoteStream);
         const peerVideoElement = peerVideo.current;
         if (peerVideoElement) {
           peerVideoElement.srcObject = remoteStream;
@@ -89,8 +93,10 @@ function MockInterview() {
 
     // Answer incoming calls
     peer.on('call', (call) => {
+      console.log('Incoming call from:', call.peer);
       call.answer(stream);
       call.on('stream', (remoteStream) => {
+        console.log('Remote stream received (callee):', remoteStream);
         const peerVideoElement = peerVideo.current;
         if (peerVideoElement) {
           peerVideoElement.srcObject = remoteStream;
