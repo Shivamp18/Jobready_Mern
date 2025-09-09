@@ -15,9 +15,15 @@ module.exports = (io) => {
     });
     
     // Join a specific room (for forum topics or mock interviews)
-   socket.on('join_room', (roomId) => {
+    socket.on('join_room', (roomId, peerId) => { // Changed event name to match client and added peerId
       socket.join(roomId);
-      console.log(`Socket ${socket.id} joined room: ${roomId}`);
+      console.log(`Socket ${socket.id} with Peer ID ${peerId} joined room: ${roomId}`);
+      
+      // Notify other users in the room that a new user has connected
+      socket.to(roomId).emit('user-connected', peerId); // Emit user-connected with peerId
+      
+      // Store peerId for this socket in this room
+      socket.peerId = peerId; // Attach peerId to socket object for later use
     });
     
     // Send message in a room
@@ -40,11 +46,22 @@ module.exports = (io) => {
     
     // Disconnect event
     socket.on('disconnect', () => {
+      console.log('Client disconnected:', socket.id);
       const userId = activeUsers[socket.id];
       if (userId) {
         console.log(`User ${userId} disconnected`);
         io.emit('user_offline', userId);
         delete activeUsers[socket.id];
+      }
+
+      // If a peer was connected, notify others in the room
+      if (socket.peerId && socket.rooms) {
+        socket.rooms.forEach(room => {
+          if (room !== socket.id) { // Don't emit to self
+            socket.to(room).emit('user-disconnected', socket.peerId);
+            console.log(`Peer ${socket.peerId} disconnected from room ${room}`);
+          }
+        });
       }
     });
   });
