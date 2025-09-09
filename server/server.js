@@ -22,36 +22,25 @@ const { authenticateToken } = require('./middleware/auth.middleware');
 
 // Config
 dotenv.config();
-console.log('Server CLIENT_URL:', process.env.CLIENT_URL);
-console.log('Server MONGO_URI:', process.env.MONGO_URI);
 
 const app = express();
 app.use(bodyParser.json());
 const server = http.createServer(app);
-const allowedOrigins = process.env.NODE_ENV === 'production' 
-  ? process.env.CLIENT_URL 
-  : [process.env.CLIENT_URL, 'http://localhost:3000']; // Allow local frontend during development
-
-const corsOptions = {
-  origin: allowedOrigins,
-  methods: ["GET", "POST", "PUT", "DELETE"], // Added common methods
-  credentials: true
-};
-
 const io = socketIo(server, {
-  cors: corsOptions
+  cors: {
+    origin: process.env.CLIENT_URL,
+    methods: ["GET", "POST"],
+    credentials: true
+  }
 });
 
 // Middleware
-app.use(cors(corsOptions));
+app.use(cors({
+  origin: process.env.CLIENT_URL,
+  credentials: true
+}));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-
-// General request logger
-app.use((req, res, next) => {
-  console.log(`Incoming Request: ${req.method} ${req.url}`);
-  next();
-});
 
 // Database connection
 mongoose.connect(process.env.MONGO_URI)
@@ -61,10 +50,10 @@ mongoose.connect(process.env.MONGO_URI)
 
 
   // Serve PeerJS server
-// const peerServer = ExpressPeerServer(server, {
-//   debug: true
-// });
-// app.use("/peerjs", peerServer);
+const peerServer = ExpressPeerServer(server, {
+  debug: true
+});
+app.use("/peerjs", peerServer);
 
 
 
