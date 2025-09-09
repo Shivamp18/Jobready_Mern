@@ -1,10 +1,14 @@
 
 import { io } from "socket.io-client";
 
-console.log('Type of io:', typeof io);
-const socketUrl = process.env.REACT_APP_SOCKET_URL || "http://localhost:5000";
-console.log('Socket URL:', socketUrl);
-const socket = io(socketUrl);
-console.log('Socket object after initialization:', socket);
+let socketInstance = null;
 
-export default socket;
+const getSocket = () => {
+  if (!socketInstance) {
+    const socketUrl = process.env.REACT_APP_SOCKET_URL || "http://localhost:5000";
+    socketInstance = io(socketUrl);
+  }
+  return socketInstance;
+};
+
+export default getSocket;
