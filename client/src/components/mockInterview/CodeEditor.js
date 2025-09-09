@@ -138,6 +138,36 @@ function MockInterview() {
           console.error('Call error:', err);
         }
       });
+
+       // Listen for existing users in the room and call them
+      socket.on('existing-users', (users) => {
+        console.log('Existing users in room:', users);
+        users.forEach((userId) => {
+          if (!userId) {
+            console.warn('Received null or undefined userId from existing-users event. Skipping call.');
+            return;
+          }
+          try {
+            const call = peerRef.current.call(userId, stream);
+            if (call) {
+              call.on('stream', (remoteStream) => {
+                console.log('Remote stream received (existing user caller):', remoteStream);
+                const peerVideoElement = peerVideo.current;
+                if (peerVideoElement) {
+                  peerVideoElement.srcObject = remoteStream;
+                  peerVideoElement.onloadedmetadata = () => {
+                    peerVideoElement.play().catch(err => console.error('Remote video play error (existing user caller):', err));
+                  };
+                }
+              });
+            } else {
+              console.warn('Peer call returned null or undefined for existing userId:', userId);
+            }
+          } catch (err) {
+            console.error('Call error for existing user:', err);
+          }
+        });
+      });
     }).catch((err) => {
       console.error('Media error:', err);
     });
