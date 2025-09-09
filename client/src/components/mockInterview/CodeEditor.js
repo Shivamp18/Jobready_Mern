@@ -122,18 +122,19 @@ function MockInterview() {
           const call = peerRef.current.call(userId, stream);
           if (call) {
             call.on('stream', (remoteStream) => {
-            console.log('Remote stream received (caller):', remoteStream);
-            const peerVideoElement = peerVideo.current;
-            if (peerVideoElement) {
-              peerVideoElement.srcObject = remoteStream;
-              peerVideoElement.onloadedmetadata = () => {
-                peerVideoElement.play().catch(err => console.error('Remote video play error (caller):', err));
-              };
-            }
-          });
-          }else {
+              console.log('Remote stream received (caller):', remoteStream);
+              const peerVideoElement = peerVideo.current;
+              if (peerVideoElement) {
+                peerVideoElement.srcObject = remoteStream;
+                peerVideoElement.onloadedmetadata = () => {
+                  peerVideoElement.play().catch(err => console.error('Remote video play error (caller):', err));
+                };
+              }
+            });
+          } else {
             console.warn('Peer call returned null or undefined for userId:', userId);
-          }catch (err) {
+          }
+        } catch (err) {
           console.error('Call error:', err);
         }
       });
