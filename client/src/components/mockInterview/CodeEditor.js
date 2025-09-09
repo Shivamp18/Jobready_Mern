@@ -1,165 +1,111 @@
+import React, { useEffect, useRef, useState } from "react";
+import Peer from "peerjs";
+import { getSocket } from "../utils/socket"; // adjust path if needed
 
-import React, { useEffect, useRef, useState } from 'react';
-import getSocket from '../../utils/socket';
-import Peer from 'peerjs';
-import Editor from '@monaco-editor/react';
-import { useNavigate, useParams, useLocation } from 'react-router-dom';
-import axios from 'axios';
-import { Button, Card, Form, Row, Col } from 'react-bootstrap';
-import { Rnd } from "react-rnd";
-import { loader } from '@monaco-editor/react';
-import customThemes from '../../utils/monacoThemes';
-
-
-
-
-const peer = new Peer();
-
-const themes = ['vs-dark', 'light', 'hc-black', 'dracula', 'monokai', 'solarized-light'];
-
-const boilerplates = {
-  javascript: `// JavaScript Example\nconsole.log("Hello World");`,
-  python: `# Python Example\nprint("Hello World")`,
-  c: `#include <stdio.h>\nint main() {\n  printf("Hello World");\n  return 0;\n}`,
-  cpp: `#include <iostream>\nusing namespace std;\nint main() {\n  cout << "Hello World";\n  return 0;\n}`,
-  java: `public class Main {\n  public static void main(String[] args) {\n    System.out.println("Hello World");\n  }\n}`,
-  typescript: `// TypeScript Example\nconsole.log("Hello World");`,
-  go: `package main\nimport "fmt"\nfunc main() {\n  fmt.Println("Hello World")\n}`,
-};
-
-function MockInterview() {
-  const [code, setCode] = useState(boilerplates['javascript']);
-  const [theme, setTheme] = useState('vs-dark');
-  const [timer, setTimer] = useState(0);
-  const [output, setOutput] = useState('');
-  const [compiling, setCompiling] = useState(false);
-  const [language, setLanguage] = useState('javascript');
-  const [isSessionEnded, setIsSessionEnded] = useState(false);
-
+function MockInterview({ roomId }) {
   const myVideo = useRef(null);
   const peerVideo = useRef(null);
-
-  const { roomId } = useParams();
-  const { search } = useLocation();
-  const role = new URLSearchParams(search).get('role');
-
-  const navigate = useNavigate();
-
- useEffect(() => {
-  let localStream;
-
-  // Load Monaco custom themes
-  loader.init().then((monaco) => {
-    Object.entries(customThemes).forEach(([name, themeData]) => {
-      monaco.editor.defineTheme(name, themeData);
-    });
-  });
-
-  // Join Peer room
-  peer.on('open', (id) => {
-    console.log('Peer ID:', id);
-    const socket = getSocket();
-    socket.emit('join_room', roomId, id);
-  });
-
-  // Get user's video/audio
-  navigator.mediaDevices.getUserMedia({ video: true, audio: true }).then((stream) => {
-    console.log('Local stream obtained:', stream);
-    localStream = stream;
-
-    const myVideoElement = myVideo.current;
-    if (myVideoElement) {
-      myVideoElement.srcObject = stream;
-      myVideoElement.onloadedmetadata = () => {
-        myVideoElement.play().catch(err => console.error('Local video play error:', err));
-      };
-    }
-
-    // Call when someone connects
-    socket.on('user-connected', (userId) => {
-     console.log('User connected:', userId);
-      const call = peer.call(userId, stream);
-      call.on('stream', (remoteStream) => {
-        console.log('Remote stream received (caller):', remoteStream);
-        const peerVideoElement = peerVideo.current;
-        if (peerVideoElement) {
-          peerVideoElement.srcObject = remoteStream;
-          peerVideoElement.onloadedmetadata = () => {
-            peerVideoElement.play().catch(err => console.error('Remote video play error (caller):', err));
-          };
-        }
-      });
-    });
-
-    // Answer incoming calls
-    peer.on('call', (call) => {
-      console.log('Incoming call from:', call.peer);
-      call.answer(stream);
-      call.on('stream', (remoteStream) => {
-        console.log('Remote stream received (callee):', remoteStream);
-        const peerVideoElement = peerVideo.current;
-        if (peerVideoElement) {
-          peerVideoElement.srcObject = remoteStream;
-          peerVideoElement.onloadedmetadata = () => {
-            peerVideoElement.play().catch(err => console.error('Remote video play error (callee):', err));
-          };
-        }
-      });
-    });
-  }).catch((err) => {
-    console.error('Media error:', err);
-  });
-
-  // Join code collaboration room
-  if (roomId) {
-    const socket = getSocket();
-    socket.emit('join_room', roomId);
-  }
-
-  // Listen for code updates
-   const socket = getSocket();
-  socket.on('code_update', (data) => {
-    if (data?.code !== undefined) {
-      setCode(data.code);
-    }
-  });
-
-  // ✅ Cleanup function
-  return () => {
-    const socket = getSocket();
-    socket.off('code_update');
-    socket.emit('leave_room', roomId);
-    peer.disconnect();
-    peer.destroy();
-
-    if (localStream) {
-      localStream.getTracks().forEach((track) => track.stop());
-    }
-
-    const myVideoElement = myVideo.current;
-    if (myVideoElement && myVideoElement.srcObject) {
-      myVideoElement.srcObject.getTracks().forEach((track) => track.stop());
-      myVideoElement.srcObject = null;
-    }
-
-    const peerVideoElement = peerVideo.current;
-    if (peerVideoElement && peerVideoElement.srcObject) {
-      peerVideoElement.srcObject.getTracks().forEach((track) => track.stop());
-      peerVideoElement.srcObject = null;
-    }
-  };
-}, [roomId]);
-
-
+  const peerRef = useRef(null);
+  const [localStream, setLocalStream] = useState(null);
 
   useEffect(() => {
+    const socket = getSocket();
+
+    // ✅ Create Peer instance per user
+    peerRef.current = new Peer(undefined, {
+      host: window.location.hostname,
+      port: process.env.NODE_ENV === "production" ? 443 : 5000,
+      path: "/peerjs",
+      secure: process.env.NODE_ENV === "production",
+      config: {
+        iceServers: [
+          { urls: "stun:stun.l.google.com:19302" },
+          {
+            urls: "turn:openrelay.metered.ca:80",
+            username: "openrelayproject",
+            credential: "openrelayproject",
+          },
+        ],
+      },
+    });
+
+    // ✅ When Peer is open, join room
+    peerRef.current.on("open", (id) => {
+      console.log("Peer connected with ID:", id);
+      socket.emit("join-room", roomId, id);
+    });
+
+    // ✅ Access camera & mic
+    navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+      .then((stream) => {
+        setLocalStream(stream);
+
+        // Show my video
+        if (myVideo.current) {
+          myVideo.current.srcObject = stream;
+          myVideo.current.onloadedmetadata = () => myVideo.current.play();
+        }
+
+        // Answer incoming calls
+        peerRef.current.on("call", (call) => {
+          call.answer(stream);
+          call.on("stream", (remoteStream) => {
+            if (peerVideo.current) {
+              peerVideo.current.srcObject = remoteStream;
+              peerVideo.current.onloadedmetadata = () => peerVideo.current.play();
+            }
+          });
+        });
+
+        // Call new users when they connect
+        socket.on("user-connected", (userId) => {
+          console.log("User connected:", userId);
+          const call = peerRef.current.call(userId, stream);
+          call.on("stream", (remoteStream) => {
+            if (peerVideo.current) {
+              peerVideo.current.srcObject = remoteStream;
+              peerVideo.current.onloadedmetadata = () => peerVideo.current.play();
+            }
+          });
+        });
+      })
+      .catch((err) => console.error("Failed to get local stream:", err));
+
+    // ✅ Cleanup on unmount
+    return () => {
+      socket.off("code_update");
+      socket.emit("leave_room", roomId);
+
+      if (peerRef.current) {
+        peerRef.current.disconnect();
+        peerRef.current.destroy();
+      }
+
+      if (localStream) {
+        localStream.getTracks().forEach((track) => track.stop());
+      }
+
+      const myVideoElement = myVideo.current;
+      if (myVideoElement && myVideoElement.srcObject) {
+        myVideoElement.srcObject.getTracks().forEach((track) => track.stop());
+        myVideoElement.srcObject = null;
+      }
+
+      const peerVideoElement = peerVideo.current;
+      if (peerVideoElement && peerVideoElement.srcObject) {
+        peerVideoElement.srcObject.getTracks().forEach((track) => track.stop());
+        peerVideoElement.srcObject = null;
+      }
+    };
+  }, [roomId, localStream]);
+
+    useEffect(() => {
     const interval = setInterval(() => setTimer((t) => t + 1), 1000);
     return () => clearInterval(interval);
   }, []);
 
   const handleCodeChange = (value) => {
     setCode(value);
-    const socket = getSocket();
     socket.emit('code_change', { roomId, code: value });
   };
 
@@ -203,7 +149,6 @@ function MockInterview() {
   }
 
   // Disconnect from socket room
-    const socket = getSocket();
   socket.emit('leave_room', roomId);
 
   // Destroy peer connection
@@ -217,8 +162,6 @@ function MockInterview() {
   else{
     navigate(`/feedback/${roomId}/thank-you`);
   }
-
-
   };
 
   const minutes = Math.floor(timer / 60);
@@ -366,380 +309,3 @@ function MockInterview() {
 }
 
 export default MockInterview;
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
