@@ -1,17 +1,60 @@
-import React, { useEffect, useRef, useState } from "react";
-import Peer from "peerjs";
-import { getSocket } from "../utils/socket"; // adjust path if needed
+import React, { useEffect, useRef, useState } from 'react';
+import getSocket from '../../utils/socket';
+import Peer from 'peerjs';
+import Editor from '@monaco-editor/react';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
+import axios from 'axios';
+import { Button, Card, Form, Row, Col } from 'react-bootstrap';
+import { Rnd } from "react-rnd";
+import { loader } from '@monaco-editor/react';
+import customThemes from '../../utils/monacoThemes';
 
-function MockInterview({ roomId }) {
+const themes = ['vs-dark', 'light', 'hc-black', 'dracula', 'monokai', 'solarized-light'];
+
+const boilerplates = {
+  javascript: `// JavaScript Example\nconsole.log("Hello World");`,
+  python: `# Python Example\nprint("Hello World")`,
+  c: `#include <stdio.h>\nint main() {\n  printf("Hello World");\n  return 0;\n}`,
+  cpp: `#include <iostream>\nusing namespace std;\nint main() {\n  cout << "Hello World";\n  return 0;\n}`,
+  java: `public class Main {\n  public static void main(String[] args) {\n    System.out.println("Hello World");\n  }\n}`,
+  typescript: `// TypeScript Example\nconsole.log("Hello World");`,
+  go: `package main\nimport "fmt"\nfunc main() {\n  fmt.Println("Hello World")\n}`,
+};
+
+function MockInterview() {
+  const [code, setCode] = useState(boilerplates['javascript']);
+  const [theme, setTheme] = useState('vs-dark');
+  const [timer, setTimer] = useState(0);
+  const [output, setOutput] = useState('');
+  const [compiling, setCompiling] = useState(false);
+  const [language, setLanguage] = useState('javascript');
+  const [isSessionEnded, setIsSessionEnded] = useState(false);
+
   const myVideo = useRef(null);
   const peerVideo = useRef(null);
+
   const peerRef = useRef(null);
-  const [localStream, setLocalStream] = useState(null);
+  const socketRef = useRef(null);
+  const localStreamRef = useRef(null);
+
+  const { roomId } = useParams();
+  const { search } = useLocation();
+  const role = new URLSearchParams(search).get('role');
+
+  const navigate = useNavigate();
 
   useEffect(() => {
-    const socket = getSocket();
+    // init monaco themes (kept from your original)
+    loader.init().then((monaco) => {
+      Object.entries(customThemes).forEach(([name, themeData]) => {
+        monaco.editor.defineTheme(name, themeData);
+      });
+    });
 
-    // ✅ Create Peer instance per user
+    const socket = getSocket();
+    socketRef.current = socket;
+
+    // Create a Peer instance per component (no global peer)
     peerRef.current = new Peer(undefined, {
       host: window.location.hostname,
       port: process.env.NODE_ENV === "production" ? 443 : 5000,
@@ -20,92 +63,137 @@ function MockInterview({ roomId }) {
       config: {
         iceServers: [
           { urls: "stun:stun.l.google.com:19302" },
+          // A public TURN is included to improve connectivity in restrictive networks.
+          // Replace these with your own TURN server creds for production if available.
           {
             urls: "turn:openrelay.metered.ca:80",
             username: "openrelayproject",
-            credential: "openrelayproject",
-          },
-        ],
-      },
+            credential: "openrelayproject"
+          }
+        ]
+      }
     });
 
-    // ✅ When Peer is open, join room
-    peerRef.current.on("open", (id) => {
-      console.log("Peer connected with ID:", id);
-      socket.emit("join-room", roomId, id);
+    // When peer opens, tell server our peer id (used for call signaling)
+    peerRef.current.on('open', (id) => {
+      console.log('Peer ID:', id);
+      // keep both emits used in your original code to avoid breaking server expectations:
+      socket.emit('join-room', roomId, id);   // peer signaling
+      socket.emit('join_room', roomId);       // code collaboration room (your original used this too)
     });
 
-    // ✅ Access camera & mic
-    navigator.mediaDevices.getUserMedia({ video: true, audio: true })
-      .then((stream) => {
-        setLocalStream(stream);
+    // Get user's video/audio
+    navigator.mediaDevices.getUserMedia({ video: true, audio: true }).then((stream) => {
+      console.log('Local stream obtained:', stream);
+      localStreamRef.current = stream;
 
-        // Show my video
-        if (myVideo.current) {
-          myVideo.current.srcObject = stream;
-          myVideo.current.onloadedmetadata = () => myVideo.current.play();
-        }
-
-        // Answer incoming calls
-        peerRef.current.on("call", (call) => {
-          call.answer(stream);
-          call.on("stream", (remoteStream) => {
-            if (peerVideo.current) {
-              peerVideo.current.srcObject = remoteStream;
-              peerVideo.current.onloadedmetadata = () => peerVideo.current.play();
-            }
-          });
-        });
-
-        // Call new users when they connect
-        socket.on("user-connected", (userId) => {
-          console.log("User connected:", userId);
-          const call = peerRef.current.call(userId, stream);
-          call.on("stream", (remoteStream) => {
-            if (peerVideo.current) {
-              peerVideo.current.srcObject = remoteStream;
-              peerVideo.current.onloadedmetadata = () => peerVideo.current.play();
-            }
-          });
-        });
-      })
-      .catch((err) => console.error("Failed to get local stream:", err));
-
-    // ✅ Cleanup on unmount
-    return () => {
-      socket.off("code_update");
-      socket.emit("leave_room", roomId);
-
-      if (peerRef.current) {
-        peerRef.current.disconnect();
-        peerRef.current.destroy();
-      }
-
-      if (localStream) {
-        localStream.getTracks().forEach((track) => track.stop());
-      }
-
+      // show local video
       const myVideoElement = myVideo.current;
-      if (myVideoElement && myVideoElement.srcObject) {
-        myVideoElement.srcObject.getTracks().forEach((track) => track.stop());
-        myVideoElement.srcObject = null;
+      if (myVideoElement) {
+        myVideoElement.srcObject = stream;
+        myVideoElement.onloadedmetadata = () => {
+          myVideoElement.play().catch(err => console.error('Local video play error:', err));
+        };
       }
 
-      const peerVideoElement = peerVideo.current;
-      if (peerVideoElement && peerVideoElement.srcObject) {
-        peerVideoElement.srcObject.getTracks().forEach((track) => track.stop());
-        peerVideoElement.srcObject = null;
+      // Answer incoming calls (other peers calling us)
+      peerRef.current.on('call', (call) => {
+        console.log('Incoming call from:', call.peer);
+        call.answer(stream); // answer with our stream
+        call.on('stream', (remoteStream) => {
+          console.log('Remote stream received (callee):', remoteStream);
+          const peerVideoElement = peerVideo.current;
+          if (peerVideoElement) {
+            peerVideoElement.srcObject = remoteStream;
+            peerVideoElement.onloadedmetadata = () => {
+              peerVideoElement.play().catch(err => console.error('Remote video play error (callee):', err));
+            };
+          }
+        });
+      });
+
+      // When server tells us a new user connected, call them (we are caller)
+      socket.on('user-connected', (userId) => {
+        console.log('User connected:', userId);
+        try {
+          const call = peerRef.current.call(userId, stream);
+          call.on('stream', (remoteStream) => {
+            console.log('Remote stream received (caller):', remoteStream);
+            const peerVideoElement = peerVideo.current;
+            if (peerVideoElement) {
+              peerVideoElement.srcObject = remoteStream;
+              peerVideoElement.onloadedmetadata = () => {
+                peerVideoElement.play().catch(err => console.error('Remote video play error (caller):', err));
+              };
+            }
+          });
+        } catch (err) {
+          console.error('Call error:', err);
+        }
+      });
+    }).catch((err) => {
+      console.error('Media error:', err);
+    });
+
+    // Join code collaboration room (you used this as well)
+    if (roomId) {
+      socket.emit('join_room', roomId);
+    }
+
+    // Listen for code updates
+    socket.on('code_update', (data) => {
+      if (data?.code !== undefined) {
+        setCode(data.code);
+      }
+    });
+
+    return () => {
+      try {
+        if (socketRef.current) {
+          socketRef.current.off('code_update');
+          socketRef.current.off('user-connected');
+          socketRef.current.emit('leave_room', roomId);
+          // don't forcibly disconnect socket here if other parts of app need it; but original cleanup did emit leave_room
+        }
+      } catch (e) {
+        console.warn('Socket cleanup error', e);
+      }
+
+      try {
+        if (peerRef.current) {
+          peerRef.current.disconnect();
+          peerRef.current.destroy();
+        }
+      } catch (e) {
+        console.warn('Peer cleanup error', e);
+      }
+
+      // Stop local tracks
+      if (localStreamRef.current) {
+        localStreamRef.current.getTracks().forEach((track) => track.stop());
+        localStreamRef.current = null;
+      }
+
+      // Clear video elements
+      if (myVideo.current && myVideo.current.srcObject) {
+        myVideo.current.srcObject.getTracks().forEach((t) => t.stop());
+        myVideo.current.srcObject = null;
+      }
+      if (peerVideo.current && peerVideo.current.srcObject) {
+        peerVideo.current.srcObject.getTracks().forEach((t) => t.stop());
+        peerVideo.current.srcObject = null;
       }
     };
-  }, [roomId, localStream]);
+  }, [roomId]);
 
-    useEffect(() => {
+  useEffect(() => {
     const interval = setInterval(() => setTimer((t) => t + 1), 1000);
     return () => clearInterval(interval);
   }, []);
 
   const handleCodeChange = (value) => {
     setCode(value);
+    const socket = socketRef.current || getSocket();
     socket.emit('code_change', { roomId, code: value });
   };
 
@@ -135,33 +223,45 @@ function MockInterview({ roomId }) {
   };
 
   const endSession = () => {
-   
-  // Stop user's video/audio stream
-  if (myVideo.current && myVideo.current.srcObject) {
-    myVideo.current.srcObject.getTracks().forEach((track) => track.stop());
-    myVideo.current.srcObject = null;
-  }
+    // Stop user's video/audio stream
+    if (myVideo.current && myVideo.current.srcObject) {
+      myVideo.current.srcObject.getTracks().forEach((track) => track.stop());
+      myVideo.current.srcObject = null;
+    }
 
-  // Stop peer video stream
-  if (peerVideo.current && peerVideo.current.srcObject) {
-    peerVideo.current.srcObject.getTracks().forEach((track) => track.stop());
-    peerVideo.current.srcObject = null;
-  }
+    // Stop peer video stream
+    if (peerVideo.current && peerVideo.current.srcObject) {
+      peerVideo.current.srcObject.getTracks().forEach((track) => track.stop());
+      peerVideo.current.srcObject = null;
+    }
 
-  // Disconnect from socket room
-  socket.emit('leave_room', roomId);
+    // Stop local stream ref
+    if (localStreamRef.current) {
+      localStreamRef.current.getTracks().forEach((t) => t.stop());
+      localStreamRef.current = null;
+    }
 
-  // Destroy peer connection
-  peer.destroy();
+    // Disconnect from socket room
+    const socket = socketRef.current || getSocket();
+    socket.emit('leave_room', roomId);
 
-  // Navigate away only after cleaning
-  setIsSessionEnded(true);
-  if (role === 'interviewer') {
-    navigate(`/feedback/${roomId}`);
-  }
-  else{
-    navigate(`/feedback/${roomId}/thank-you`);
-  }
+    // Destroy peer connection
+    try {
+      if (peerRef.current) {
+        peerRef.current.disconnect();
+        peerRef.current.destroy();
+      }
+    } catch (e) {
+      console.warn('Peer destroy error', e);
+    }
+
+    // Navigate away only after cleaning
+    setIsSessionEnded(true);
+    if (role === 'interviewer') {
+      navigate(`/feedback/${roomId}`);
+    } else {
+      navigate(`/feedback/${roomId}/thank-you`);
+    }
   };
 
   const minutes = Math.floor(timer / 60);
@@ -184,26 +284,17 @@ function MockInterview({ roomId }) {
                 }}
                 bounds="window"
                 style={{ zIndex: 1000, marginTop: '-14rem' }}
-
               >
-
                 <Card>
                   <Card.Body>
-                    <h2 >Your Video</h2>
-                    <video ref={myVideo} muted autoPlay className="w-100 h-48 object-fit" />
+                    <h2>Your Video</h2>
+                    <video ref={myVideo} muted autoPlay playsInline className="w-100 h-48 object-fit" />
                   </Card.Body>
                 </Card>
-
               </Rnd>
-
-
             </Col>
 
-
-
-
             <Col md={6}>
-
               <Rnd
                 default={{
                   x: 100,
@@ -213,29 +304,20 @@ function MockInterview({ roomId }) {
                 }}
                 bounds="window"
                 style={{ zIndex: 1000, marginTop: '-14rem', marginLeft: '30rem' }}
-
               >
-
                 <Card >
                   <Card.Body>
                     <h2>{role === 'interviewer' ? "Interviewee's Video" : "Interviewer's Video"}</h2>
-                    <video ref={peerVideo} autoPlay className="w-100 h-48 object-fit" />
+                    <video ref={peerVideo} autoPlay playsInline className="w-100 h-48 object-fit" />
                   </Card.Body>
                 </Card>
-
               </Rnd>
-
-
-
             </Col>
           </Row>
         </div>
 
-
-
         <Col md={12} style={{ justifyItems: "center", marginTop: '-15rem', justifyContent: 'center' }}>
           <Row className=" d-flex justify-content-space-between mb-4">
-
             <Col md={4} style={{ width: '16rem' }}>
               <Form.Group>
                 <Form.Label>Select Theme</Form.Label>
@@ -256,7 +338,6 @@ function MockInterview({ roomId }) {
                     setLanguage(e.target.value);
                     setCode(boilerplates[e.target.value]);
                   }}
-
                 >
                   {Object.keys(boilerplates).map((lang) => (
                     <option key={lang}>{lang}</option>
@@ -271,7 +352,6 @@ function MockInterview({ roomId }) {
               <h2 className="text-lg font-semibold mb-2">Code Editor</h2>
               <Editor
                 height="35vh"
-
                 theme={theme}
                 language={language}
                 value={code}
@@ -301,8 +381,6 @@ function MockInterview({ roomId }) {
             </Card.Body>
           </Card>
         </Col>
-
-
       </Row >
     </div >
   );
