@@ -15,15 +15,9 @@ module.exports = (io) => {
     });
     
     // Join a specific room (for forum topics or mock interviews)
-   socket.on('join-room', (roomId, peerId) => {
+   socket.on('join_room', (roomId) => {
       socket.join(roomId);
-      console.log(`Socket ${socket.id} with Peer ID ${peerId} joined room: ${roomId}`);
-      
-      // Notify other users in the room that a new user has connected
-      socket.to(roomId).emit('user-connected', peerId); // Emit user-connected with peerId
-      
-      // Store peerId for this socket in this room
-      socket.peerId = peerId;
+      console.log(`Socket ${socket.id} joined room: ${roomId}`);
     });
     
     // Send message in a room
