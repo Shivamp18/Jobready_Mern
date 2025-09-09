@@ -21,6 +21,7 @@ module.exports = (io) => {
     socket.on('join_room', (roomId, peerId) => {
       console.log(`Socket ${socket.id} with Peer ID ${peerId} joined room for peer signaling: ${roomId}`);
 
+      socket.join(roomId);
       // Initialize room if it doesn't exist
       if (!roomPeers.has(roomId)) {
         roomPeers.set(roomId, new Set());
