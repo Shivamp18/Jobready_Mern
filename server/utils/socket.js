@@ -1,6 +1,8 @@
 module.exports = (io) => {
   // Store active users
   const activeUsers = {};
+
+  const roomPeers = new Map(); 
   
   io.on('connection', (socket) => {
     console.log('New client connected:', socket.id);
@@ -15,16 +17,41 @@ module.exports = (io) => {
     });
     
     // Join a specific room (for forum topics or mock interviews)
-    socket.on('join_room', (roomId, peerId) => { // Changed event name to match client and added peerId
-      socket.join(roomId);
-      console.log(`Socket ${socket.id} with Peer ID ${peerId} joined room: ${roomId}`);
-      
+
+    socket.on('join_room', (roomId, peerId) => {
+      console.log(`Socket ${socket.id} with Peer ID ${peerId} joined room for peer signaling: ${roomId}`);
+
+      // Initialize room if it doesn't exist
+      if (!roomPeers.has(roomId)) {
+        roomPeers.set(roomId, new Set());
+      }
+
+      // Get existing peers in the room
+      const peersInRoom = roomPeers.get(roomId);
+
+      // Notify the new user about existing peers
+      if (peersInRoom.size > 0) {
+        socket.emit('existing-users', Array.from(peersInRoom));
+        console.log(`Emitted existing-users to ${peerId} in room ${roomId}:`, Array.from(peersInRoom));
+      }
+
       // Notify other users in the room that a new user has connected
-      socket.to(roomId).emit('user-connected', peerId); // Emit user-connected with peerId
-      
-      // Store peerId for this socket in this room
-      socket.peerId = peerId; // Attach peerId to socket object for later use
+      socket.to(roomId).emit('user-connected', peerId);
+      console.log(`Emitted user-connected to room ${roomId} for new peer: ${peerId}`);
+
+      // Add the new peer to the room's set of peers
+      peersInRoom.add(peerId);
+
+      // Store peerId and roomId for this socket for disconnect handling
+      socket.peerId = peerId;
+      socket.roomId = roomId;
     });
+    
+    socket.on('join_code_room', (roomId) => {
+      socket.join(roomId);
+      console.log(`Socket ${socket.id} joined room for code collaboration: ${roomId}`);
+    });
+
     
     // Send message in a room
     socket.on('send_message', (data) => {
