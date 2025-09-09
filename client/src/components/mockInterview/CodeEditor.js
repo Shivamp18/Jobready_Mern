@@ -1,6 +1,6 @@
 
 import React, { useEffect, useRef, useState } from 'react';
-import socket from '../../utils/socket';
+import getSocket from '../../utils/socket';
 import Peer from 'peerjs';
 import Editor from '@monaco-editor/react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
@@ -57,6 +57,7 @@ function MockInterview() {
 
   // Join Peer room
   peer.on('open', () => {
+    const socket = getSocket();
     socket.emit('join-room', roomId);
   });
 
@@ -105,10 +106,12 @@ function MockInterview() {
 
   // Join code collaboration room
   if (roomId) {
+    const socket = getSocket();
     socket.emit('join_room', roomId);
   }
 
   // Listen for code updates
+   const socket = getSocket();
   socket.on('code_update', (data) => {
     if (data?.code !== undefined) {
       setCode(data.code);
@@ -117,6 +120,7 @@ function MockInterview() {
 
   // ✅ Cleanup function
   return () => {
+    const socket = getSocket();
     socket.off('code_update');
     socket.emit('leave_room', roomId);
     peer.disconnect();
@@ -149,6 +153,7 @@ function MockInterview() {
 
   const handleCodeChange = (value) => {
     setCode(value);
+    const socket = getSocket();
     socket.emit('code_change', { roomId, code: value });
   };
 
@@ -192,6 +197,7 @@ function MockInterview() {
   }
 
   // Disconnect from socket room
+    const socket = getSocket();
   socket.emit('leave_room', roomId);
 
   // Destroy peer connection
