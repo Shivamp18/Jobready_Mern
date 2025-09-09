@@ -174,7 +174,7 @@ function MockInterview() {
 
     // Join code collaboration room (you used this as well)
     if (roomId) {
-      socket.emit('join_room', roomId);
+      socket.emit('join_code_room', roomId);
     }
 
     // Listen for code updates
