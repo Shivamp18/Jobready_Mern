@@ -59,7 +59,7 @@ function MockInterview() {
   peer.on('open', (id) => {
     console.log('Peer ID:', id);
     const socket = getSocket();
-    socket.emit('join-room', roomId, id); // Pass peer ID to server
+    socket.emit('join_room', roomId, id);
   });
 
   // Get user's video/audio
