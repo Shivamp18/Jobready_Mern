@@ -5,11 +5,20 @@ import CardItem from "./CardItem";
 
 const ActiveCardsList = (props) => {
   // Maps all Cards to a CardItem component
+
   function cardList() {
-    return props.activeCards.map((card) => {
-      return <CardItem card={card} key={card["_id"]} />;
-    });
-  }
+  if (!Array.isArray(props.activeCards)) return null;
+  return props.activeCards.map((card) => (
+    <CardItem card={card} key={card["_id"]} />
+  ));
+}
+
+
+  // function cardList() {
+  //   return props.activeCards.map((card) => {
+  //     return <CardItem card={card} key={card["_id"]} />;
+  //   });
+  // }
 
   const navigate = useNavigate();
 
